@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="src" path="asteroids"/>
+	<classpathentry kind="src" path="black_holes"/>
+	<classpathentry kind="src" path="fluid_layers"/>
+	<classpathentry kind="src" path="galaxies"/>
+	<classpathentry kind="src" path="planets"/>
+	<classpathentry kind="src" path="shadows"/>
+	<classpathentry kind="src" path="stars"/>
+	<classpathentry kind="src" path="generic_images"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
