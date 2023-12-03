@@ -20,17 +20,17 @@ import drawable.DPSelectionCursor;
 import drawable.Pnt2D;
 
 public class TileManager {
-  
+
   public double zFactor;
   public Pnt2D focus;
-  
+
   class ManagerThread extends Thread{
     @Override
     public void run(){
       updateCycle();
     }
   }
-  
+
   private long seed;
   private int initTileSize; //1,000,000
   private double initNoiseSize=250000; // 250.000
@@ -42,45 +42,45 @@ public class TileManager {
   private int g;
   private Boolean updateFlag=false;
   private Boolean selectionFlag=false;
-  
+
   private Rectangle2D.Double sel;
 
   private Lock defaultLock;
   private Lock selectionLock;
-  
+
   private ManagerThread mThread;
-  
+
   private LinkedList<Tile> activeTiles;
   private LinkedList<DPTileBoundPolygon> tilePolygons;
   private LinkedList<Rasterable> displayItems;
   private LinkedList<Rasterable> selectedItems;
   private LinkedList<DrawablePath> selectionCursors;
-  
+
   private Random rand;
   private BufferedImage[] variants;
-  
+
   private CloudsNoise cNoise;
-  
+
   private TiledID pID;
   private int operatingMode;
   private boolean wasSingle;
   private int maxGeneration;
-  
+
   @SuppressWarnings("hiding")
     private ValueRamp initialize(long s, double z, Pnt2D f, long max, int xRes, int yRes, int amt, BufferedImage[] v){
     defaultLock = new ReentrantLock();
     selectionLock = new ReentrantLock();
-    
-    
+
+
     ValueRamp vr = new ValueRamp();
     vr.addHandle(0.25,0.2);
     vr.addHandle(0.75,0.9);
-    
+
     cNoise = new CloudsNoise(max, CloudsNoise.TYPE_BILINEAR);
     cNoise.setValueRamp(vr);
     mThread = new ManagerThread();
     rand= new Random();
-    
+
     activeTiles = new LinkedList<>();
     displayItems = new LinkedList<>();
     selectedItems= new LinkedList<>();
@@ -96,25 +96,25 @@ public class TileManager {
     initPointsAmt=amt;
 
     variants=v;
-    
+
     seed=s;
     mThread.start();
     wasSingle=false;
-    
+
     initTileSize = (int)(1000/zFactor);
     initNoiseSize=initTileSize/4.0;
-    
+
     actTileSize=initTileSize;
     maxGeneration=10;
 
     return vr;
   }
-  
+
   public TileManager(long s, double z, Pnt2D f, long max, int xRes, int yRes, int amt, BufferedImage[] v){
     initialize(s,z,f,max,xRes,yRes,amt,v);
     operatingMode=0;
   }
-  
+
   public TileManager(long s, double z, Pnt2D f, long max, int xRes, int yRes, int amt, BufferedImage[] v, BufferedImage d, TiledID p){
     ValueRamp vr = initialize(s,z,f,max,xRes,yRes,amt,v);
     cNoise = new CloudsNoise(d, max, CloudsNoise.TYPE_BILINEAR);
@@ -122,10 +122,10 @@ public class TileManager {
     operatingMode=1;
     pID=p;
   }
-  
+
   public void setSelection(Rectangle r){
     if(selectionLock.tryLock()){
-      sel=new Rectangle2D.Double(r.getX(),r.getY(),r.getWidth(),r.getHeight());      
+      sel=new Rectangle2D.Double(r.getX(),r.getY(),r.getWidth(),r.getHeight());
       synchronized(selectionFlag){
         selectionFlag=true;
       }
@@ -135,22 +135,22 @@ public class TileManager {
       selectionLock.unlock();
     }
   }
-  
+
   public TileManager(long s, double z, Pnt2D f, long max, int xRes, int yRes, int amt, BufferedImage[] v, ValueRamp vr, CBStar cbs){
     ValueRamp interR = initialize(s,z,f,max,xRes,yRes,amt,v);
     double tmp = Double.parseDouble(cbs.properties.get("Size"))*5000;
     long rS = (long)CBPlanet.getRawSize(tmp);
     cNoise = new CloudsNoise(vr, rS, CloudsNoise.TYPE_BILINEAR);
     cNoise.setValueRamp(interR);
-    
+
     ValueRamp genRamp = new ValueRamp();
-    
+
     maxGeneration = (int)Math.round(genRamp.getValue(rS/1000000000.0))+6;
     System.out.println(rS+" -> "+maxGeneration);
     operatingMode=2;
     pID=cbs.getID();
   }
-  
+
   public void setPosZ(double x, double y, double factor){
     if(defaultLock.tryLock()){
       if(focus.x!=x || focus.y!=y || zFactor!=factor){
@@ -167,7 +167,7 @@ public class TileManager {
       defaultLock.unlock();
     }
   }
-  
+
   public void resize(int x, int y){
     if(defaultLock.tryLock()){
       if(xRes!=x ||yRes!=y){
@@ -183,7 +183,7 @@ public class TileManager {
       defaultLock.unlock();
     }
   }
-  
+
   public void updateCycle(){
     while(true){
       try{
@@ -200,7 +200,7 @@ public class TileManager {
           constructTilePolygons();
           defaultLock.unlock();
         }
-        
+
         if(selectionFlag){
           synchronized(selectionFlag){
             selectionFlag=false;
@@ -209,7 +209,7 @@ public class TileManager {
           updateSelectionList();
           selectionLock.unlock();
         }
-        
+
         if(!updateFlag && !selectionFlag){
           synchronized(activeTiles){
             activeTiles.wait();
@@ -220,7 +220,7 @@ public class TileManager {
       }
     }
   }
-  
+
   private void checkGen(){
     //see if displayedTiles should be split or merged, threshold is minScreenDimension
     //g < 10 to ensure a really zoomed in feeling leaving out the last gen
@@ -234,20 +234,20 @@ public class TileManager {
       actTileSize*=4;
     }
   }
-  
+
   private void addTilesAfterMovement(){
     //translate screen coordinates into game coordinates
     final double xMin = focus.x-((xRes/2)/zFactor);
     final double yMin = focus.y-((yRes/2)/zFactor);
-    
+
     double x = xMin;
     double y = yMin;
     double tmpY=y;
-    
+
     //plus tileSize or otherwise the most right and bottom rows won't be created
     final double xMax = x+(xRes/zFactor)+actTileSize;
     final double yMax = y+(yRes/zFactor)+actTileSize;
-    
+
     //get the first pixel, see if a tile coveres it. if not, create
     //look for the next posible uncovered pixel, repead until screen is covered
     while(y < yMax){
@@ -260,7 +260,7 @@ public class TileManager {
           //calculate which root tile will contain the point, create
         //while actG<g
           //calculate in which tile the point falls, create if necessary, down to actG=G
-        
+
         //go up while no covering tile is found
         while(!covered && relativeG>0){
           relativeG--;
@@ -280,15 +280,15 @@ public class TileManager {
           double tileX=x/initTileSize;
           tileX=Math.floor(tileX);
           tileX*=initTileSize;
-          
+
           double tileY=y/initTileSize;
           tileY=Math.floor(tileY);
           tileY*=initTileSize;
-        
+
           int pX = (int)((tileX)/initTileSize);
           int pY = (int)((tileY)/initTileSize);
 
-          
+
           //unique seed by concatenating the two coordinates
           String s1 = Math.abs(Math.round(tileX))+""+Math.abs(Math.round(tileY));
           if(s1.length()>19){
@@ -297,12 +297,12 @@ public class TileManager {
             System.out.println(" got cut: "+s1);
           }
           rand.setSeed(Long.parseLong(s1)+seed);
-          
+
           TiledID tid=null;
-          
+
           //int shift = (int)Math.ceil(MAX/initTileSize);
           int shift = 1000; //because initT is MAX/1000, shift is always 1000
-          
+
           switch(operatingMode){
           case 0:
             tid = new TiledID(pX+shift,pY+shift);
@@ -314,15 +314,15 @@ public class TileManager {
             tid = new TiledID(pID,pX+shift,pY+shift,true);
             break;
           }
-          
-          
+
+
           Tile t = new Tile(rand.nextLong(), new Pnt2D(tileX,tileY), initTileSize, null, 0, variants,
-              new HashMap<Pnt2D, Rasterable>(), new Point(pX,pY),tid);
+              new HashMap<>(), new Point(pX,pY),tid);
 
           if(!activeTiles.contains(t)){
             activeTiles.add(t);
             container=t;
-            
+
             cNoise.setOffset(container.getStart());
             Double[][] tileData = cNoise.getPointsDistorted2D(container.getSize(), container.getSize(), initPointsAmt, container.getSeed(),
                                       initNoiseSize, 1, 1.2);
@@ -340,10 +340,10 @@ public class TileManager {
           //calculate the tile that should contain the point
           double relX=x-container.getStart().x;
           double relY=y-container.getStart().y;
-          
+
           int pInTX = (int)(relX/(container.getSize()/4));
           int pInTY = (int)(relY/(container.getSize()/4));
-          
+
           //look if the desired tile is already present
           if(container.getSubTile(pInTX, pInTY)==null){
             //if not, create and populate
@@ -363,7 +363,7 @@ public class TileManager {
             //else just set the reference
             container=container.getSubTile(pInTX, pInTY);
           }
-          relativeG++;    
+          relativeG++;
         }
         x+=container.getSize();
         tmpY=container.getSize();
@@ -373,7 +373,7 @@ public class TileManager {
     }
     //AND FINALLY YOU'RE DONE :D
   }
-  
+
   /*@Deprecated
   @SuppressWarnings("unchecked")
   private void removeDuplicates(){
@@ -385,27 +385,27 @@ public class TileManager {
     }
     activeTiles=(LinkedList<Tile>)forSaving.clone();
   }*/
-  
+
   private void removeUnneededTiles(){
     //remoceDuplicates();
-    
+
     //1)get rid of all too deep subtiles (TileG>g, or just children of TileG>=g)
     //2)get rid of all tileG>g tileG=g tiles not in screen proximity
     //3)get rid of all tileG<g tiles not parents of displayed tiles (tileG=g)
-    
+
     //4)3 can be ensured by 2: If the children is in proximity, so is the parent
     //  so modifying 2) to: get rid of all tiles not in screenProximity where tileG <= g+1
     //               or all children not in screenProximity where tileG < g+1
-    
-    
+
+
     //remember: you can't delete items of a list you're iteratung on, so remember which one
     //you want to delete afterwards
     LinkedList<Tile> forCollapse = new LinkedList<>();
-    
+
     for(Tile t:activeTiles){
       if(t.getGen()>=g){
         forCollapse.addAll(t.getAllocatedChildren());
-        t.collapseAllChildren();  
+        t.collapseAllChildren();
       }
       if(t.getGen() < g+1){
         LinkedList<Point> pointsForCollapse = new LinkedList<>();
@@ -413,24 +413,24 @@ public class TileManager {
         for(Tile candidate:t.getAllocatedChildren()){
           //eligible if they are out of screenBounds +- 1 tileSize
           // -(focus+(Res/2)/zFator represents the game coordinates of pixel 0,0 in screenspace
-          
+
           double xMin = focus.x-((xRes/2)/zFactor)-actTileSize;
           double xMax = focus.x+((xRes/2)/zFactor)+actTileSize;
-          
+
           double yMin = focus.y-((yRes/2)/zFactor)-actTileSize;
           double yMax = focus.y+((yRes/2)/zFactor)+actTileSize;
-          
-          if(candidate.getStart().x+candidate.getSize() < xMin || 
+
+          if(candidate.getStart().x+candidate.getSize() < xMin ||
              candidate.getStart().x > xMax ||
              candidate.getStart().y+candidate.getSize() < yMin ||
              candidate.getStart().y > yMax){
-            
-            
+
+
             pointsForCollapse.add(candidate.getRelPos());
             forCollapse.add(candidate);
           }
         }
-        for(Point p:pointsForCollapse){        
+        for(Point p:pointsForCollapse){
           t.collapseChild(p.x, p.y);
         }
       }
@@ -438,16 +438,16 @@ public class TileManager {
     activeTiles.removeAll(forCollapse);
     forCollapse.clear();
   }
-  
+
   private void updateDisplayTiles(){
     displayItems.clear();
     for(Tile t:activeTiles){
       if(t.getGen()==g){
         displayItems.addAll(t.getDrawingSet());
       }
-    }  
+    }
   }
-  
+
   private void updateSelectionList(){
     selectedItems.clear();
     selectionCursors.clear();
@@ -457,12 +457,12 @@ public class TileManager {
     Rectangle2D.Double bodyBounds;
     //if the size is 100, it's been adjusted and meant for only 1 selection
     wasSingle =(sel.height*sel.width==100);
-    
+
     sel.x=sel.x/zFactor+focus.x-(xRes/2)/zFactor;
     sel.y=sel.y/zFactor+focus.y-(yRes/2)/zFactor;
     sel.height/=zFactor;
     sel.width/=zFactor;
-    
+
     for(Tile t:activeTiles){
       if(t.getGen()==g){
         tileRect = new Rectangle2D.Double(t.getStart().x,t.getStart().y,t.getSize(),t.getSize());
@@ -480,11 +480,11 @@ public class TileManager {
       }
     }
   }
-  
+
   public boolean wasSingle(){
     return wasSingle;
   }
-  
+
   private void constructTilePolygons(){
     Color c = new Color(0,1,1,0.02f);
     tilePolygons.clear();
@@ -492,28 +492,28 @@ public class TileManager {
       if(t.getGen()==g){
         LinkedList<Pnt2D> dl = new LinkedList<>();
           double x1,x2,y1,y2;
-          
+
           x1 = 0;
           x2 = t.getSize();
           y1 = 0;
           y2 = t.getSize();
-        
+
           dl.addLast(new Pnt2D(x2,y2));
           dl.addLast(new Pnt2D(x2,y1));
           dl.addLast(new Pnt2D(x1,y1));
           dl.addLast(new Pnt2D(x1,y2));
-          
+
           /*dl.add(new DPoint(x2,y2));
           dl.add(new DPoint(x1,y2));
           dl.add(new DPoint(x1,y1));
           dl.add(new DPoint(x2,y1));*/
-          
+
           DPTileBoundPolygon b = new DPTileBoundPolygon(dl,t.getStart(),c,t.getIDStr());
           tilePolygons.add(b);
       }
     }
   }
-  
+
   @SuppressWarnings("unchecked")
   public LinkedList<DrawablePath> getTilePaths(){
     if(defaultLock.tryLock()){
@@ -526,7 +526,7 @@ public class TileManager {
       return null;
     }
   }
-  
+
   @SuppressWarnings("unchecked")
   public LinkedList<Rasterable> getSelectedItems(){
     if(selectionLock.tryLock()){
@@ -539,10 +539,10 @@ public class TileManager {
       return null;
     }
   }
-  
+
   public int getActiveTileCount(){
     if(defaultLock.tryLock()){
-      try{  
+      try{
         return activeTiles.size();
       }finally{
         defaultLock.unlock();
@@ -565,7 +565,7 @@ public class TileManager {
     }
 
   }
-  
+
   public int getG(){
     if(defaultLock.tryLock()){
       try{
@@ -577,7 +577,7 @@ public class TileManager {
       return -1;
     }
   }
-  
+
   @SuppressWarnings("unchecked")
   public LinkedList<DrawablePath> getAllSelectionCursors(){
     if(selectionLock.tryLock()){
